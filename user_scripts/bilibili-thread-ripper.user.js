@@ -1,14 +1,14 @@
 // ==UserScript==
-// @name         Bilibili 线程撕裂者
-// @namespace    https://github.com/MrTangLuyao/Bilibili-thread-ripper
-// @version      0.9.2.0
+// @name         Bilibili 线程撕裂者（unicbm 自用修复版）
+// @namespace    https://github.com/unicbm/Bilibili-thread-ripper
+// @version      0.9.2.1
 // @description  保留哔哩哔哩原生播放器，通过多 CDN、多 Range 并发下载改善视频缓冲速度。
-// @author       MrTangLuyao
+// @author       MrTangLuyao, unicbm
 // @license      MIT
-// @homepageURL  https://github.com/MrTangLuyao/Bilibili-thread-ripper
-// @supportURL   https://github.com/MrTangLuyao/Bilibili-thread-ripper/issues
-// @updateURL    https://raw.githubusercontent.com/MrTangLuyao/Bilibili-thread-ripper/main/user_scripts/bilibili-thread-ripper.user.js
-// @downloadURL  https://raw.githubusercontent.com/MrTangLuyao/Bilibili-thread-ripper/main/user_scripts/bilibili-thread-ripper.user.js
+// @homepageURL  https://github.com/unicbm/Bilibili-thread-ripper
+// @supportURL   https://github.com/unicbm/Bilibili-thread-ripper/issues
+// @updateURL    https://raw.githubusercontent.com/unicbm/Bilibili-thread-ripper/main/user_scripts/bilibili-thread-ripper.user.js
+// @downloadURL  https://raw.githubusercontent.com/unicbm/Bilibili-thread-ripper/main/user_scripts/bilibili-thread-ripper.user.js
 // @match        https://www.bilibili.com/*
 // @match        https://m.bilibili.com/*
 // @run-at       document-start
@@ -549,7 +549,12 @@ const chrome = (() => {
     }
 
     const allows = (url) => !bans || bans.allows(url);
-    return Object.freeze({ allows, failure, ordered, rangeCandidates, rescueCandidates, startupCandidates, status, success, urls });
+    function updateRepresentation(next) {
+      const previousUrls = allUrls();
+      representation = next;
+      if (JSON.stringify(previousUrls) !== JSON.stringify(allUrls())) health.clear();
+    }
+    return Object.freeze({ allows, failure, ordered, rangeCandidates, rescueCandidates, startupCandidates, status, success, updateRepresentation, urls });
   }
 
   root.__BILI_CDN_RESOLVER_FACTORY__ = Object.freeze({
@@ -748,6 +753,18 @@ const chrome = (() => {
     const getSettings = options.getSettings;
     const onTransfer = typeof options.onTransfer === "function" ? options.onTransfer : () => null;
     const semaphore = new Semaphore(core.normalizeSettings(getSettings()).concurrency);
+    // A resolver identifies one media file, including its initialization and index.
+    // Check headers before any bytes can reach the progressive playback callback.
+    const fileTotals = new WeakMap();
+
+    function verifyFileTotal(resolver, total, remember = false) {
+      if (!Number.isSafeInteger(total)) return;
+      const expectedTotal = fileTotals.get(resolver);
+      if (expectedTotal !== undefined && total !== expectedTotal) {
+        throw new Error("不同 CDN 返回的文件总长度不一致");
+      }
+      if (remember) fileTotals.set(resolver, total);
+    }
 
     async function readBody(response, controller, transferId, settings, received) {
       if (!response.body?.getReader) {
@@ -818,13 +835,20 @@ const chrome = (() => {
           // The status tells a refused signed address (4xx) apart from a node that is down.
           throw Object.assign(new Error(`Range 校验失败：HTTP ${response.status}`), { status: response.status });
         }
+        verifyFileTotal(resolver, contentRange.total);
         const bytes = await readBody(response, controller, transferId, settings, received);
         if (bytes.byteLength !== piece.length) throw new Error(`子块长度不符：${bytes.byteLength}/${piece.length}`);
+        // Another request may have completed while this body was downloading.
+        // Only a complete, length-checked response can establish the baseline.
+        verifyFileTotal(resolver, contentRange.total, true);
         const seconds = Math.max(0.001, (performance.now() - startedAt) / 1000);
         resolver.success(url, bytes.byteLength / seconds);
         onTransfer({ phase: "done", id: transferId });
         return { bytes, total: contentRange.total, url };
       } catch (error) {
+        // fetch resolves at the headers. Rejecting a response alone does not stop
+        // its body (notably a CDN returning an entire file with HTTP 200).
+        controller.abort(error);
         // Received bytes tell a dead node (0 KiB) apart from a transfer that stalled midway.
         resolver.failure(url, error, received.bytes);
         const canceled = error?.name === "AbortError";
@@ -1946,7 +1970,19 @@ const chrome = (() => {
       const nextVideo = next.preferred;
       const audioChanged = !sameRepresentation(selection.audio, next.audio);
       selection = next;
-      if (!audioChanged && sameRepresentation(selectedVideo, nextVideo)) return;
+      if (!audioChanged && sameRepresentation(selectedVideo, nextVideo)) {
+        // Same bytes can have new signed URLs. Keep the MediaSource and buffered
+        // frames, but let subsequent requests (including after a seek) use them.
+        selectedVideo = nextVideo;
+        if (session) {
+          session.videoResolver.updateRepresentation(nextVideo);
+          session.audioResolver.updateRepresentation(next.audio);
+          for (const track of session.tracks) {
+            track.representation = track.kind === "video" ? nextVideo : next.audio;
+          }
+        }
+        return;
+      }
       await startSession(nextVideo, playbackState());
     }
 

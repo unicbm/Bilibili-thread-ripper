@@ -7,14 +7,16 @@ const { chromium } = require("playwright");
 const root = path.resolve(__dirname, "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 const script = fs.readFileSync(path.join(root, "user_scripts/bilibili-thread-ripper.user.js"), "utf8");
-const scriptUrl = "https://raw.githubusercontent.com/MrTangLuyao/Bilibili-thread-ripper/main/user_scripts/bilibili-thread-ripper.user.js";
+const scriptUrl = "https://raw.githubusercontent.com/unicbm/Bilibili-thread-ripper/main/user_scripts/bilibili-thread-ripper.user.js";
 const source = file => fs.readFileSync(path.join(root, file), "utf8").replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trimEnd();
 
 function checkFile() {
   assert.ok(script.startsWith("// ==UserScript==\n"), "Tampermonkey needs the header on the first line");
   const header = script.slice(0, script.indexOf("// ==/UserScript=="));
   const values = name => [...header.matchAll(new RegExp(`^// @${name}\\s+(.+)$`, "gm"))].map(match => match[1].trim());
-  assert.deepEqual(values("version"), [manifest.version]);
+  assert.deepEqual(values("version"), ["0.9.2.1"]);
+  assert.deepEqual(values("name"), [manifest.name + "（unicbm 自用修复版）"]);
+  assert.deepEqual(values("namespace"), ["https://github.com/unicbm/Bilibili-thread-ripper"]);
   assert.deepEqual(values("updateURL"), [scriptUrl]);
   assert.deepEqual(values("downloadURL"), [scriptUrl]);
   assert.deepEqual(values("match"), ["https://www.bilibili.com/*", "https://m.bilibili.com/*"]);

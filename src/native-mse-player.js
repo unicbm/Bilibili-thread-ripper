@@ -744,7 +744,19 @@
       const nextVideo = next.preferred;
       const audioChanged = !sameRepresentation(selection.audio, next.audio);
       selection = next;
-      if (!audioChanged && sameRepresentation(selectedVideo, nextVideo)) return;
+      if (!audioChanged && sameRepresentation(selectedVideo, nextVideo)) {
+        // Same bytes can have new signed URLs. Keep the MediaSource and buffered
+        // frames, but let subsequent requests (including after a seek) use them.
+        selectedVideo = nextVideo;
+        if (session) {
+          session.videoResolver.updateRepresentation(nextVideo);
+          session.audioResolver.updateRepresentation(next.audio);
+          for (const track of session.tracks) {
+            track.representation = track.kind === "video" ? nextVideo : next.audio;
+          }
+        }
+        return;
+      }
       await startSession(nextVideo, playbackState());
     }
 

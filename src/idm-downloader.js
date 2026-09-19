@@ -65,6 +65,18 @@
     const getSettings = options.getSettings;
     const onTransfer = typeof options.onTransfer === "function" ? options.onTransfer : () => null;
     const semaphore = new Semaphore(core.normalizeSettings(getSettings()).concurrency);
+    // A resolver identifies one media file, including its initialization and index.
+    // Check headers before any bytes can reach the progressive playback callback.
+    const fileTotals = new WeakMap();
+
+    function verifyFileTotal(resolver, total, remember = false) {
+      if (!Number.isSafeInteger(total)) return;
+      const expectedTotal = fileTotals.get(resolver);
+      if (expectedTotal !== undefined && total !== expectedTotal) {
+        throw new Error("不同 CDN 返回的文件总长度不一致");
+      }
+      if (remember) fileTotals.set(resolver, total);
+    }
 
     async function readBody(response, controller, transferId, settings, received) {
       if (!response.body?.getReader) {
@@ -135,13 +147,20 @@
           // The status tells a refused signed address (4xx) apart from a node that is down.
           throw Object.assign(new Error(`Range 校验失败：HTTP ${response.status}`), { status: response.status });
         }
+        verifyFileTotal(resolver, contentRange.total);
         const bytes = await readBody(response, controller, transferId, settings, received);
         if (bytes.byteLength !== piece.length) throw new Error(`子块长度不符：${bytes.byteLength}/${piece.length}`);
+        // Another request may have completed while this body was downloading.
+        // Only a complete, length-checked response can establish the baseline.
+        verifyFileTotal(resolver, contentRange.total, true);
         const seconds = Math.max(0.001, (performance.now() - startedAt) / 1000);
         resolver.success(url, bytes.byteLength / seconds);
         onTransfer({ phase: "done", id: transferId });
         return { bytes, total: contentRange.total, url };
       } catch (error) {
+        // fetch resolves at the headers. Rejecting a response alone does not stop
+        // its body (notably a CDN returning an entire file with HTTP 200).
+        controller.abort(error);
         // Received bytes tell a dead node (0 KiB) apart from a transfer that stalled midway.
         resolver.failure(url, error, received.bytes);
         const canceled = error?.name === "AbortError";

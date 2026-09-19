@@ -306,7 +306,12 @@
     }
 
     const allows = (url) => !bans || bans.allows(url);
-    return Object.freeze({ allows, failure, ordered, rangeCandidates, rescueCandidates, startupCandidates, status, success, urls });
+    function updateRepresentation(next) {
+      const previousUrls = allUrls();
+      representation = next;
+      if (JSON.stringify(previousUrls) !== JSON.stringify(allUrls())) health.clear();
+    }
+    return Object.freeze({ allows, failure, ordered, rangeCandidates, rescueCandidates, startupCandidates, status, success, updateRepresentation, urls });
   }
 
   root.__BILI_CDN_RESOLVER_FACTORY__ = Object.freeze({

@@ -1,4 +1,14 @@
-# Bilibili 线程撕裂者
+# Bilibili 线程撕裂者 — unicbm 自用修复版
+
+本 fork 的油猴脚本版本为 **0.9.2.1**，基于上游 0.9.2.0。保留原来的并发、CDN 选择和缓冲策略，仅修复失败请求清理、播放签名地址刷新、分块交付前的文件总长度校验。播放器诊断和扩展版本仍标记上游内核版本 0.9.2.0。
+
+[**安装 unicbm 自用修复版油猴脚本**](https://raw.githubusercontent.com/unicbm/Bilibili-thread-ripper/main/user_scripts/bilibili-thread-ripper.user.js)
+
+安装前请禁用原版油猴脚本以及同类播放器接管扩展，避免重复运行；安装后刷新 B 站页面。本版使用独立名称与 namespace，自动更新只跟随本 fork。原版脚本仍可保留以便切回；同一站点的原有脚本设置会继续沿用。
+
+源码修改后运行 `./scripts/build-userscript.ps1` 重新生成脚本；本 fork 的油猴发布版本在该构建脚本中维护。新增回归测试：`node --test dev/shared-core-test.js dev/fork-regression-test.js`。
+
+以下为上游项目说明。
 
 ## 目录
 
@@ -52,7 +62,7 @@
 ### 方式2 油猴脚本安装
 
 1. 装 [Tampermonkey](https://www.tampermonkey.net/)
-2. 点这里：[**安装线程撕裂者**](https://raw.githubusercontent.com/MrTangLuyao/Bilibili-thread-ripper/main/user_scripts/bilibili-thread-ripper.user.js)
+2. 点这里：[**安装 unicbm 自用修复版**](https://raw.githubusercontent.com/unicbm/Bilibili-thread-ripper/main/user_scripts/bilibili-thread-ripper.user.js)
 3. 打开 B 站视频，完事
 
 - 有新版会自动更新

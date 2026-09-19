@@ -2,9 +2,10 @@
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 $manifest = [System.IO.File]::ReadAllText((Join-Path $projectRoot "manifest.json"), $utf8) | ConvertFrom-Json
-$version = [string]$manifest.version
-$repository = "https://github.com/MrTangLuyao/Bilibili-thread-ripper"
-$scriptUrl = "https://raw.githubusercontent.com/MrTangLuyao/Bilibili-thread-ripper/main/user_scripts/bilibili-thread-ripper.user.js"
+# The fork's userscript has its own release version; engine diagnostics retain the upstream version.
+$version = "0.9.2.1"
+$repository = "https://github.com/unicbm/Bilibili-thread-ripper"
+$scriptUrl = "https://raw.githubusercontent.com/unicbm/Bilibili-thread-ripper/main/user_scripts/bilibili-thread-ripper.user.js"
 
 function Read-Source([string]$file) {
   return ([System.IO.File]::ReadAllText((Join-Path $projectRoot $file), $utf8).TrimStart([char]0xFEFF) -replace "`r`n", "`n").TrimEnd([char]10)
@@ -19,11 +20,11 @@ $sitePatterns = @($manifest.content_scripts | ForEach-Object { $_.matches } | Wh
 
 $header = @(
   "// ==UserScript==",
-  "// @name         $($manifest.name)",
+  "// @name         $($manifest.name)（unicbm 自用修复版）",
   "// @namespace    $repository",
   "// @version      $version",
   "// @description  $($manifest.description)",
-  "// @author       MrTangLuyao",
+  "// @author       MrTangLuyao, unicbm",
   "// @license      MIT",
   "// @homepageURL  $repository",
   "// @supportURL   $repository/issues",
